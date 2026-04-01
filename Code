@@ -1,1 +1,236 @@
 
+Hardware part(ESP8266)
+Code 
+#define BLYNK_TEMPLATE_ID "TMPL3m_yz262Z" 
+#define BLYNK_TEMPLATE_NAME "IoT based Agriculture System" 
+#define BLYNK_AUTH_TOKEN "aBo39-L_7a2OeVtmK02OaolAPegac-kT" 
+#define BLYNK_PRINT Serial 
+#include <ESP8266WiFi.h> 
+#include <BlynkSimpleEsp8266.h> 
+#include <DHT.h> 
+#define SOIL_MOISTURE_PIN A0 
+#define THRESHOLD_MOISTURE 50 
+#define PUMP_PIN D1 
+#define PUMP_SWITCH V6 
+#define DHT_PIN D2 
+#define DHT_TYPE DHT11 
+#define RAIN_SENSOR_PIN A0 
+char auth[] = BLYNK_AUTH_TOKEN; 
+char ssid[] = "realme C21Y"; 
+char pass[] = "abc1744991"; 
+DHT dht(DHT_PIN, DHT_TYPE); 
+ // Change the address to your LCD's address 
+BlynkTimer mer; 
+bool isPumpOn = false; 
+int temt6000Pin = A0; 
+float light; 
+int light_value; 
+ 
+void sendSensorData() 
+{ 
+  int soilMoisture = analogRead(SOIL_MOISTURE_PIN); 
+  int soilMoisturePercentage = map(soilMoisture, 400, 1023, 100, 0); 
+  Serial.print("Soil Moisture Percentage "); 
+23 
+ 
+  Serial.println(soilMoisturePercentage); 
+  float temperature = dht.readTemperature(); 
+  float humidity = dht.readHumidity(); 
+  Serial.print("Temperature"); 
+  Serial.println(temperature); 
+  Serial.print("Humidity"); 
+  Serial.println(humidity); 
+  if (!isnan(temperature) && !isnan(humidity)) 
+  { 
+    Blynk.virtualWrite(V0, temperature); 
+    Blynk.virtualWrite(V1, humidity); 
+  } 
+  else 
+  { 
+    Serial.println("Failed to read data from DHT sensor!"); 
+  } 
+  Blynk.virtualWrite(V2, soilMoisturePercentage); 
+ 
+  int rainsensorValue = analogRead(RAIN_SENSOR_PIN); 
+  int rainValue = map(rainsensorValue, 400, 1023, 100, 0); 
+   
+  Serial.print("Rain Sensor Value: "); 
+  Serial.println(rainValue); 
+  Blynk.virtualWrite(V4, rainValue); // Send rain sensor value to Blynk 
+   
+  light_value = analogRead(temt6000Pin); 
+  light = light_value * 0.0976; // percentage calcula on 
+  Serial.print("Light"); 
+  Serial.println(light); 
+  //Blynk.virtualWrite(V3, light_value); // Send raw light value to Blynk 
+  Blynk.virtualWrite(V3, light);       // Send light percentage to Blynk 
+  if (isPumpOn) 
+  { 
+    digitalWrite(PUMP_PIN, HIGH); 
+    if (!isPumpOn) 
+    { 
+      Blynk.logEvent("moisture_alert", "Soil moisture is below the threshold!"); 
+24 
+ 
+      Serial.println("Soil moisture is below the threshold!"); 
+    } 
+  } 
+  else if (isPumpOn || soilMoisturePercentage < THRESHOLD_MOISTURE || rainValue > 500) 
+  { 
+    digitalWrite(PUMP_PIN, HIGH); 
+    if (!isPumpOn) 
+    { 
+      Blynk.logEvent("moisture_alert", "Soil moisture is below the threshold!"); 
+      Serial.println("Soil moisture is below the threshold!"); 
+    } 
+  } 
+  else 
+  { 
+    if (!isPumpOn) 
+    { 
+      digitalWrite(PUMP_PIN, LOW); 
+    } 
+  } 
+} 
+BLYNK_WRITE(PUMP_SWITCH) 
+{ 
+  isPumpOn = param.asInt(); 
+  if (isPumpOn) 
+  { 
+    Serial.println("Pump manually turned ON"); 
+  } 
+  else 
+  { 
+    Serial.println("Pump manually turned OFF"); 
+  } 
+} 
+void setup() 
+{ 
+  Serial.begin(9600); 
+  pinMode(PUMP_PIN, OUTPUT); 
+  pinMode(RAIN_SENSOR_PIN, INPUT); 
+25 
+ 
+  dht.begin(); 
+// Ini alize LCD 
+  //lcd.backlight(); 
+  Blynk.begin(auth, ssid, pass); 
+  mer.setInterval(3000L, sendSensorData); 
+  Blynk.virtualWrite(PUMP_SWITCH, isPumpOn); 
+  Blynk.syncVirtual(PUMP_SWITCH); 
+} 
+void loop() 
+{ 
+  Blynk.run(); 
+  mer.run(); 
+}
+
+Matlab cobe for PID  
+clc; clear; close all; 
+% Time vector 
+T = 0:1:300; 
+dt = 1; 
+% Setpoint and thresholds 
+setpoint = 55; 
+threshold_low = 50; 
+threshold_high = 60; 
+% PID Gains 
+Kp = 2.5; 
+Ki = 0.05; 
+Kd = 1; 
+% Ini aliza on 
+moisture_noPID = zeros(1, length(T)); 
+pump_noPID = zeros(1, length(T)); 
+moisture_PID = zeros(1, length(T)); 
+pump_PID = zeros(1, length(T)); 
+moisture_noPID(1) = 35; 
+moisture_PID(1) = 35; 
+% Simulated environment data 
+temperature = 25 + 3*sin(0.02*T); 
+humidity = 60 + 10*sin(0.01*T + 1); 
+26 
+ 
+rain = rand(1, length(T)) < 0.01; 
+rainMoisture = rain .* (5 + 5*rand(1, length(T))); 
+% PID state 
+integral = 0; 
+prev_error = 0; 
+% Main Simula on Loop 
+for t = 2:length(T) 
+    evap_loss = 0.03 + 0.005*(temperature(t) - 20) - 0.003*(humidity(t)/100); 
+    % Without PID Control 
+    if moisture_noPID(t-1) < setpoint && ~rain(t) 
+        pumpPower_noPID = 100; 
+    else 
+        pumpPower_noPID = 0; 
+    end 
+    pump_noPID(t) = pumpPower_noPID; 
+    pumpEffect_noPID = 0.2 * (pumpPower_noPID / 100); 
+    moisture_noPID(t) = moisture_noPID(t-1) - evap_loss + pumpEffect_noPID + rainMoisture(t); 
+    moisture_noPID(t) = max(0, min(100, moisture_noPID(t))); 
+    % With PID Control 
+    error = setpoint - moisture_PID(t-1); 
+    integral = integral + error * dt; 
+    deriva ve = (error - prev_error) / dt; 
+    pid_output = Kp * error + Ki * integral + Kd * deriva ve; 
+    if moisture_PID(t-1) < setpoint && ~rain(t) 
+        pumpPower_PID = max(0, min(pid_output, 100)); 
+    else 
+        pumpPower_PID = 0; 
+    end 
+    pump_PID(t) = pumpPower_PID; 
+    pumpEffect_PID = 0.2 * (pumpPower_PID / 100); 
+    moisture_PID(t) = moisture_PID(t-1) - evap_loss + pumpEffect_PID + rainMoisture(t); 
+    moisture_PID(t) = max(0, min(100, moisture_PID(t))); 
+    prev_error = error; 
+end 
+figure('Name', 'Soil Moisture Control - PID vs No PID', 'Color', 'w'); 
+% Color defini ons 
+color_nopid = [0.2 0.2 0.7]; % dark blue 
+27 
+ 
+color_pid = [0 0.6 0];       % dark green 
+% Soil Moisture 
+subplot(5,1,1); 
+plot(T, moisture_noPID, '--', 'Color', color_nopid, 'LineWidth', 1.5); hold on; 
+plot(T, moisture_PID, '-', 'Color', color_pid, 'LineWidth', 2); 
+yline(setpoint, 'r--', 'Setpoint', 'LabelHorizontalAlignment', 'le '); 
+yline(threshold_low, 'k--', 'Low Threshold', 'LabelHorizontalAlignment', 'le '); 
+yline(threshold_high, 'k--', 'High Threshold', 'LabelHorizontalAlignment', 'le '); 
+tle('Soil Moisture (%): PID vs No PID'); 
+xlabel('Time (s)'); ylabel('Moisture (%)'); 
+legend('No PID', 'PID', 'Setpoint', 'Low Threshold', 'High Threshold'); 
+grid on; 
+% Pump Signal 
+subplot(5,1,2); 
+plot(T, pump_noPID, '--', 'Color', color_nopid, 'LineWidth', 1.5); hold on; 
+plot(T, pump_PID, '-', 'Color', color_pid, 'LineWidth', 2); 
+yline(0, 'k--', 'Pump OFF', 'LabelHorizontalAlignment', 'le '); 
+yline(100, 'k--', 'Pump ON', 'LabelHorizontalAlignment', 'le '); 
+tle('Pump Ac va on (PID vs No PID)'); 
+xlabel('Time (s)'); ylabel('Pump Power (%)'); 
+legend('No PID', 'PID', 'Pump OFF', 'Pump ON'); 
+grid on; 
+% Temperature 
+subplot(5,1,3); 
+plot(T, temperature, 'Color', [0.7 0 0.7], 'LineWidth', 2); 
+yline(mean(temperature), '--k', 'Avg Temp', 'LabelHorizontalAlignment', 'le '); 
+tle('Temperature (°C)'); 
+xlabel('Time (s)'); ylabel('°C'); 
+grid on; 
+% Humidity 
+subplot(5,1,4); 
+plot(T, humidity, 'Color', [0 0.5 0.5], 'LineWidth', 2); 
+yline(mean(humidity), '--k', 'Avg Humidity', 'LabelHorizontalAlignment', 'le '); 
+tle('Humidity (%)'); 
+xlabel('Time (s)'); ylabel('%'); 
+grid on; 
+% Rain 
+
+ 
+subplot(5,1,5); 
+stem(T, rain, 'filled', 'r'); 
+tle('Rain Detec on'); 
+xlabel('Time (s)'); ylabel('Rain (1=Yes)'); 
+ylim([-0.1, 1.2]); 
+grid on; 
